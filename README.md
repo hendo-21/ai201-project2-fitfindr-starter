@@ -1,61 +1,36 @@
-# FitFindr — Starter Kit
+# FitFindr — Project 2
 
-This starter kit contains everything you need to begin Project 2.
+## Tool Inventory
 
-## What's Included
+**Error handling strategy**
 
-```
-ai201-project2-fitfindr-starter/
-├── data/
-│   ├── listings.json          # 40 mock secondhand listings
-│   └── wardrobe_schema.json   # Wardrobe format + example wardrobe
-├── utils/
-│   └── data_loader.py         # Helper functions for loading the data
-├── planning.md                # Your planning template — fill this out first
-└── requirements.txt           # Python dependencies
-```
 
-## Setup
+## The Planning Loop
 
-```bash
-pip install -r requirements.txt
-```
+### State Management Approach
 
-Set your Groq API key in a `.env` file (get a free key at [console.groq.com](https://console.groq.com)):
-```
-GROQ_API_KEY=your_key_here
-```
+## End-to-end workflow
 
-## The Mock Listings Dataset
 
-`data/listings.json` contains 40 mock secondhand listings across categories (tops, bottoms, outerwear, shoes, accessories) and styles (vintage, y2k, grunge, cottagecore, streetwear, and more).
+## Spec Reflection
 
-Each listing has: `id`, `title`, `description`, `category`, `style_tags`, `size`, `condition`, `price`, `colors`, `brand`, and `platform`.
+**One way the spec helped you during implementation:**
 
-Load it with:
-```python
-from utils.data_loader import load_listings
-listings = load_listings()
-```
+**One way my implementation diverged from the spec, and why:**
 
-## The Wardrobe Schema
+For tool 4, `add_items_to_wardrobe`, I wrote in my spec that the function should just return a count of the added items if successful. Ultimately, this is pretty thin context for the orechestration LLM to use, and could potentially confuse the LLM and cause it to re-call the tool. I opted instead to return the items added and which category the items belong to.
 
-`data/wardrobe_schema.json` defines the format your agent uses to represent a user's existing wardrobe. It includes:
 
-- `schema`: field definitions for a wardrobe item
-- `example_wardrobe`: a sample wardrobe with 10 items you can use for testing
-- `empty_wardrobe`: a starting template for a new user
+## AI Usage
 
-Load an example wardrobe with:
-```python
-from utils.data_loader import get_example_wardrobe
-wardrobe = get_example_wardrobe()
-```
+**Instance 1:**
+- *What I gave the AI:*
+The `suggest_outfit` tool stub and `planning.md` file and asked it to implement `suggest_outfit`.
 
-## Where to Start
+- *What it produced:*
+It produced a system prompt for the LLM that did specified the LLM's role, task, new item, and wardrobe items, but it was missing a specific instruction on the necessary length of the outfit suggestion. 
 
-1. **Read `planning.md` and fill it out before writing any code.**
-2. Verify the data loads correctly by running `python utils/data_loader.py`.
-3. Build and test each tool individually before connecting them through your planning loop.
+- *What I changed or overrode:*
+I overrode the initial implementationa and asked Claude to incorporate a constraint for the outfit suggestion length.
 
-Your implementation files go in this same directory. There's no required file structure for your agent code — organize it however makes sense for your design.
+**Instance 2:**

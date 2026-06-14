@@ -17,3 +17,6 @@ env/
 
 # typos config file
 _typos.toml
+
+# notes
+code-notes.md
