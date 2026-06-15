@@ -220,27 +220,28 @@ tool_result = caption
      ▼
 [Turn 1] 
  └── LLM detects implicit wardrobe context. 
- └── Triggers: add_items_to_wardrobe(items=[{"name": "baggy jeans"}])
+ └── Triggers: add_items_to_wardrobe(**args) <-- LLM parses args.
  └── Result: Wardrobe array mutates. Tool logs summary text to message history.
      │
      ▼
 [Turn 2]
  └── LLM detects search request and parses function arguments.
- └── Triggers: search_listings(**args)
+ └── Triggers: search_listings(**args)  <-- LLM parses args.
  └── Result: Results list and top matching item stored in session dict. Item descriptors logged to message history.
      │
      ▼
 [Turn 3]
  └── LLM sees search succeeded and notes styling prerequisite is met.
- └── Triggers: suggest_outfit(session["selected_item"])  <-- LLM does not parse any arguments.
+ └── Triggers: suggest_outfit(session["selected_item"])  <-- LLM does NOT parse any arguments.
  └── Result: Result string is stored to session and logged to message history.
      │
      ▼
 [Turn 4]
  └── LLM sees search succeeded and notes fit card prerequisite is met.
- └── Triggers: create_fit_card(session["outfit_suggestion], session["selected_item"]) <-- LLM does not parse any arguments.
+ └── Triggers: create_fit_card(session["outfit_suggestion], session["selected_item"]) <-- LLM does NOT parse any arguments.
  └── Result: Result string is stored to session and logged to message history. There are no more tools to call.
- 
+     │
+     ▼
 [Turn 5]
  └── The LLM reviews the message history and sees that it has obtained all the required information, so makes no more tool call requests.
  └── The main loop catches the lack of remaining tool calls and returns the session object.
@@ -250,9 +251,11 @@ tool_result = caption
 
 **One way the spec helped you during implementation:**
 
+The architecture section and planning loop sections of my spec were highly successful when I asked Claude to implement `run_agent` with those details. Claude was able to get a functional loop from the provided details alone on its first pass. I simply had to refine a few details, like adding a guard against the agent running an infinite loop, and proper soft fallback handling, but these only took a few more prompts until I was happy with the loop.
+
 **One way my implementation diverged from the spec, and why:**
 
-For tool 4, `add_items_to_wardrobe`, I wrote in my spec that the function should just return a count of the added items if successful. Ultimately, this is pretty thin context for the orechestration LLM to use, and could potentially confuse the LLM and cause it to re-call the tool. I opted instead to return the items added and which category the items belong to.
+For tool 4, `add_items_to_wardrobe`, I originally wrote in my spec that the function should just return a count of the added items if successful. Ultimately, this is pretty thin context for the agent to use, and could potentially confuse it, causing it to re-call the tools, or generate ressponses that are not applicable to the tool results. I opted instead to return the items added and which category the items belong.
 
 ## AI Usage
 
