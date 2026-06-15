@@ -91,7 +91,7 @@ Adds one or more items to the user's session wardrobe.
 
 **What it returns:**
 <!-- Describe the return value — what fields does a result contain? -->
-A list of tuples where each tuple contains the item name and category. This gets parsed into an agent-friendly string for the tool result.
+A simple success string informing the agent of the number of items added to the wardrobe.
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if no items were added? -->
