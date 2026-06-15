@@ -6,24 +6,20 @@ FitFinder is a multi-tool AI agent that helps users find secondhand pieces, figu
 
 ## Tool Inventory
 
-## Tool 1: search_listings
+### Tool 1: search_listings
 
 **What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
 Searches the listings data for items matching the description, size, and within the bounds set by the max price. Size and max price are both optional and default to None if not provided.
 
 **Input parameters:**
-<!-- List each parameter, its type, and what it represents -->
 - `description` (str): Keywords describing what the user is looking for.
 - `size` (str): A size string to filter listings by. None if not provided.
 - `max_price` (float): The maximum price (inclusive) is looking to pay to filter listings by. None if not provided.
 
 **What it returns:**
-<!-- Describe the return value — what fields does a result contain? -->
 The function returns a list of matching listing dicts based on the input parameters. The list is sorted from most relevant to least. 
 
 **What happens if it fails or returns nothing:**
-<!-- What should the agent do if no listings match? -->
 If no listings match, the function will return an empty list. The agent should inform the user that it could not find relevant listings based on the provided description, size, or price (if they were provided), and suggest that the user try re-phrasing their description, and/or provide additional details.
 
 ---
@@ -31,20 +27,16 @@ If no listings match, the function will return an empty list. The agent should i
 ### Tool 2: suggest_outfit
 
 **What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
 The function takes a an item the user is considering buying, the user's wardrobe, and suggests 1-2 complete outfits. 
 
 **Input parameters:**
-<!-- List each parameter, its type, and what it represents -->
 - `new_item` (dict): A listing from the listings database representing an item the user wants to buy.
 - `wardrobe` (dict): A dict with a key "items", which contains a list of wardrobe item dicts. May be empty.
 
 **What it returns:**
-<!-- Describe the return value -->
 A non-empty string containing the outfit suggestions based on either the `new_item` and the `wardrobe`, or general styling based on `new_item` if no wardrobe is found.
 
 **What happens if it fails or returns nothing:**
-<!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
 If the wardrobe is empty or no outfit can be suggested, the agent should check the initial query to see if it included style preferences, and then offer styling advice based on that. If the initial query did not include any style preferences, then offer general styling advice based on `new_item`. The agent should also offer to add wardrobe pieces, providing the user with details on the information needed to fill out a wardrobe item (wardrobe-schema in human readable format).
 
 ---
@@ -52,20 +44,16 @@ If the wardrobe is empty or no outfit can be suggested, the agent should check t
 ### Tool 3: create_fit_card
 
 **What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
 Generates a 2-4 sentence outfit-of-the-day style caption for social media based on the suggested outfit and thrifted find.
 
 **Input parameters:**
-<!-- List each parameter, its type, and what it represents -->
 - `outfit` (str): The outfit suggestions returned by `suggest_outfit` 
 - `new_item` (dict): A listing from the listings database representing an item the user wants to buy.
 
 **What it returns:**
-<!-- Describe the return value -->
 A 2-4 sentence string that can be used on TikTok/Instagram.
 
 **What happens if it fails or returns nothing:**
-<!-- What should the agent do if the outfit data is incomplete? -->
 The agent should tell the user that the outfit data is incomplete, and then provide a caption based on the thrifted item only.
 
 ---
@@ -73,32 +61,42 @@ The agent should tell the user that the outfit data is incomplete, and then prov
 ### Tool 4: add_items_to_wardrobe
 
 **What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
 Adds one or more items to the user's session wardrobe.
 
 **Input parameters:**
-<!-- List each parameter, its type, and what it represents -->
 - `items_to_add` (list[dict]): A list of structured dict objects matching the wardrobe schema (name, category, colors, style_tags, notes).
 - `wardrobe'` (list[dict]): The active session wardrobe list, passed by reference and modified in-place.
 
 **What it returns:**
-<!-- Describe the return value — what fields does a result contain? -->
 A string containing a success message that includes number of pieces added. If there was an error and nothing could be added, a error string stating nothing was added is returned.
 
 **What happens if it fails or returns nothing:**
-<!-- What should the agent do if no items were added? -->
 It returns a string describing the failure: "Error: Could not save items to wardrobe state."
 
 ---
 
-**Error handling strategy**
+### Error handling strategy
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
 | search_listings | No results match the query | Critical error: exit the agent loop and return a helpful message to the user on how they can update their query to generate results. |
 | suggest_outfit | Wardrobe is empty | Provide general styling advice based on the `selected_item`. |
-| create_fit_card | Outfit input is missing or incomplete | Create a caption based on the `selected_item` descriptors alone. |
+| create_fit_card | Outfit input is missing or incomplete | Create a caption based on the `selected_item` and query context. |
 | add_items_to_wardrobe | No items added to wardrobe | Provide general styling advice based on related descriptions provided and `selected_item`. |
+
+**Error handling agent response examples**
+
+Scenario: the user enters a query that generates no search listings.
+- Agent response: exit the planning loop early and provide the user with a helpful message about what went wrong and how to retry with a better query.
+- Evidence: [Gradio UI screenshot showing agent response](images/gradio-no-search-results.png) | [Terminal screenshot showing search_listing returns empty list and doesn't raise exception](images/search-listings-no-results.png)
+
+Scenario: `suggest_outfit` is triggered with an empty wardrobe.
+- Agent response: the tool returns a helpful string with general styling advice rather than raising an exception or returning an empty string.
+- Evidence: [Terminal screenshot showing helpul string response](images/suggest-outfit-empty-wardrobe.png)
+
+Scenario: `create_fit_card` is triggered with an empty outfit string.
+- Agent response: the tool returns a descriptive error message string and the agent generates a caption based on query context and `selected_item`, which gets stored in `session["fit_card"].
+- Evidence: [Gradio UI screenshot showing agent response](images/gradio-create-fit-card-empty-outfit-suggestion.png) | [Terminal screenshot showing `create_fit_card` returns an error string](images/create-fit-card-empty-outfit-suggestion.png)
 
 ---
 
@@ -251,13 +249,13 @@ For tool 4, `add_items_to_wardrobe`, I wrote in my spec that the function should
 
 **Instance 1:**
 - *What I gave the AI:*
-The `suggest_outfit` tool stub and `planning.md` file and asked it to implement `suggest_outfit`.
+The architecture section, planning loop logic, state management approach, system prompt, and structured tool definitions, and asked it to implement `run_agent`.
 
 - *What it produced:*
-It produced a system prompt for the LLM that specified the LLM's role, task, new item, and wardrobe items, but it was missing a specific instruction on the necessary length of the outfit suggestion. 
+It used `while True` for the main agent loop, meaning the only exit conditions for the loop were if `session["error"]` was set by a `search_listings` failure, or the agent determined no more tools needed to be called (success condition). The `while True` approach fails to catch the situation in which the agent keeps requesting tool calls, despite completing its work.
 
 - *What I changed or overrode:*
-I overrode the initial implementationa and asked Claude to incorporate a constraint for the outfit suggestion length.
+I set a `MAX_TOOL_ROUNDS` variable to cap the agent loop to 10 rounds, update `while True` to a for loop that caps at `MAX_TOOL_ROUNDS`, and added an error message for if the agent is unable to complete its work within the round limit. `session["error"]` is set to the error message so it is displayed to the user in the Gradio display window.
 
 **Instance 2:**
 - *What I gave the AI:*

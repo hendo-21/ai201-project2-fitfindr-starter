@@ -146,10 +146,10 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query | Inform the user they couldn't find any matching results and suggest providing greater detail and/or removing filter criteria. |
+| search_listings | No results match the query | Critical error: exit the agent loop and return a helpful message to the user on how they can update their query to generate results. |
 | suggest_outfit | Wardrobe is empty | Provide general styling advice based on the `selected_item`. |
-| create_fit_card | Outfit input is missing or incomplete | Create a caption based on the `selected_item` descriptors alone. |
-| add_items_to_wardrobe | No items added to wardrobe | Provide general styling advice based on related descriptions provided and the selected item. |
+| create_fit_card | Outfit input is missing or incomplete | Create a caption based on the `selected_item` and query context. |
+| add_items_to_wardrobe | No items added to wardrobe | Provide general styling advice based on related descriptions provided and `selected_item`. |
 
 ---
 
