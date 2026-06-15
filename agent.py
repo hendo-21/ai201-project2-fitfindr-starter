@@ -19,18 +19,14 @@ Usage (once implemented):
 """
 
 import json
-import os
 
-from dotenv import load_dotenv
 from groq import Groq, BadRequestError
-
 from tools import search_listings, suggest_outfit, create_fit_card, add_items_to_wardrobe
-
-load_dotenv()
+from config import MAX_TOOL_ROUNDS, LLM_MODEL, GROQ_API_KEY
 
 
 def _get_groq_client():
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = GROQ_API_KEY
     if not api_key:
         raise ValueError("GROQ_API_KEY not set. Add it to a .env file in the project root.")
     return Groq(api_key=api_key)
@@ -242,8 +238,20 @@ wardrobe-specific outfit combinations — that output is still valid. Call `crea
 after it completes; the loop will supply the result automatically.
 
 **Soft — `create_fit_card` receives incomplete outfit input:**
-If the outfit data is missing or incomplete, the tool will generate a caption using only the \
-item details — that output is acceptable.
+If called with an empty outfit, the tool will return an error string. If this error occurs, \
+your final text response must handle the fallback by generating a social media caption natively \
+in your conversational output to populate the panel, basing the caption on the details of the selected_item \
+and any style keywords from the user's query. Make it sound like a real OOTD post — casual, authentic, \
+and specific about the vibe. Mention the item name, price, and platform naturally (once each).
+
+Dual Fallback Formatting Rules:
+If a pipeline failure forces you to generate BOTH the styling advice and the social media caption natively \
+in your final text response, you MUST separate them cleanly using the tokens [OUTFIT] and [CAPTION].
+Example format:
+[OUTFIT]
+General styling advice goes here...
+[CAPTION]
+Your creative social media caption goes here...
 
 ## General guidance
 
@@ -322,12 +330,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     ]
 
     # Planning loop: keep calling the LLM until it stops requesting tool calls
-    while True:
+    for _ in range(MAX_TOOL_ROUNDS):
         response = None
         for attempt in range(3):
             try:
                 response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model=LLM_MODEL,
                     messages=messages,
                     tools=TOOLS_DEFINITIONS,  # type: ignore[arg-type]
                     tool_choice="auto",
@@ -345,10 +353,24 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
         # No more tool calls — loop is done
         if not assistant_message.tool_calls:
-            # Soft fallback: if outfit_suggestion is still empty (e.g. wardrobe add failed
-            # and suggest_outfit produced nothing), use the LLM's final text response
-            if not session["outfit_suggestion"] and assistant_message.content:
-                session["outfit_suggestion"] = assistant_message.content
+            content = assistant_message.content
+            # Check if the LLM packaged both fallbacks using tags
+            if "[OUTFIT]" in content and "[CAPTION]" in content:    # type: ignore
+                # Split the text at the [CAPTION] marker
+                parts = content.split("[CAPTION]")                  # type: ignore
+                outfit_text = parts[0].replace("[OUTFIT]", "").strip()
+                caption_text = parts[1].strip() if len(parts) > 1 else ""
+
+                if not session["outfit_suggestion"]:
+                    session["outfit_suggestion"] = outfit_text
+                if not session["fit_card"]:
+                    session["fit_card"] = caption_text
+            else:
+                # Generic fallback if only one panel was empty
+                if not session["outfit_suggestion"]:
+                    session["outfit_suggestion"] = content
+                if not session["fit_card"]:
+                    session["fit_card"] = content
             break
 
         # Process each tool call in this turn
@@ -431,8 +453,14 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                         outfit=session["outfit_suggestion"] or "",
                         new_item=session["selected_item"],
                     )
-                    session["fit_card"] = caption
-                    tool_result = caption
+                    if caption.startswith("Error:"):
+                        # Log the error to message history so the LLM knows it failed
+                        tool_result = caption 
+
+                    # Do NOT populate session["fit_card"] with the error string
+                    else:
+                        session["fit_card"] = caption
+                        tool_result = caption
 
                 print(f"  [RESULT] {tool_result}")
 
@@ -452,6 +480,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         # Critical error: stop the loop if search returned nothing
         if session["error"]:
             break
+
+    else:
+        session["error"] = (
+            f"I wasn't able to complete your request within {MAX_TOOL_ROUNDS} steps. "
+            "I'm here to help you find thrifted items and build outfits — try rephrasing your query!"
+        )
 
     return session
 

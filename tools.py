@@ -12,22 +12,19 @@ Tools:
     create_fit_card(outfit, new_item)               → str
 """
 
-import os
 import re
 
-from dotenv import load_dotenv
 from groq import Groq
 
 from utils.data_loader import load_listings
-
-load_dotenv()
+from config import GROQ_API_KEY, LLM_MODEL
 
 
 # ── Groq client ───────────────────────────────────────────────────────────────
 
 def _get_groq_client():
     """Initialize and return a Groq client using GROQ_API_KEY from .env."""
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = GROQ_API_KEY
     if not api_key:
         raise ValueError(
             "GROQ_API_KEY not set. Add it to a .env file in the project root."
@@ -141,7 +138,7 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         "If you are suggesting a second outfit combine the sentences naturally (e.g. You can wear the Y2K Baby Tee with... It would also go great with..."
     )
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=LLM_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
@@ -188,12 +185,8 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         f"${new_item['price']:.2f} on {new_item['platform']})"
     )
 
-    if not outfit or not outfit.strip():
-        prompt = (
-            f"Write a 2–4 sentence Instagram caption for this thrifted find: {item_summary}\n\n"
-            "Make it sound like a real OOTD post — casual, authentic, and specific about the vibe. "
-            "Mention the item name, price, and platform naturally (once each)."
-        )
+    if not outfit or not isinstance(outfit, str) or outfit.strip() == "":
+        return "Error: Missing outfit suggestion. Cannot generate fit card caption."
     else:
         prompt = (
             f"Write a 2–4 sentence Instagram caption for this thrifted find: {item_summary}\n\n"
@@ -209,7 +202,7 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     )
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=LLM_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
