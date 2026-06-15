@@ -162,6 +162,7 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         "Output only the outfit sentences — no labels, numbers, preamble, or explanation. "
         "A second outfit is only valid if it draws on a completely different set of wardrobe pieces than the first. "
         "If the wardrobe does not have enough distinct pieces to build two outfits with non-overlapping wardrobe items, return exactly one outfit and stop."
+        "If you are suggesting a second outfit combine the sentences naturally (e.g. You can wear the Y2K Baby Tee with... It would also go great with..."
     )
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
