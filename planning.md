@@ -26,11 +26,11 @@ Searches the listings data for items matching the description, size, and within 
 
 **What it returns:**
 <!-- Describe the return value — what fields does a result contain? -->
-The function returns a list of matching listing dicts based on the input parameters. The list is sorted from most relevant to least. 
+The function returns a list of matching listing dicts based on the input parameters. The list is sorted from most relevant to least.
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if no listings match? -->
-If no listings match, the function will return an empty list. The agent should inform the user that it could not find relevant listings based on the provided description, size, or price (if they were provided), and suggest that the user try re-phrasing their description, and/or provide additional details.
+If no listings match, the function will return an empty list rather than raising an exception. The agent should inform the user that it could not find relevant listings based on the provided description, size, or price (if they were provided), and suggest that the user try re-phrasing their description, and/or provide additional details.
 
 ---
 
@@ -51,7 +51,7 @@ A non-empty string containing the outfit suggestions based on either the `new_it
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
-If the wardrobe is empty or no outfit can be suggested, the agent should check the initial query to see if it included style preferences, and then offer styling advice based on that. If the initial query did not include any style preferences, then offer general styling advice based on `new_item`. The agent should also offer to add wardrobe pieces, providing the user with details on the information needed to fill out a wardrobe item (wardrobe-schema in human readable format).
+If the wardrobe is empty or no outfit can be suggested, the tool's LLM should check the initial query to see if it included style preferences, and then offer styling advice based on that. If the initial query did not include any style preferences, then the tool's LLM should offer general styling advice based on `new_item`.
 
 ---
 
@@ -72,7 +72,7 @@ A 2-4 sentence string that can be used on TikTok/Instagram.
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the outfit data is incomplete? -->
-The agent should tell the user that the outfit data is incomplete, and then provide a caption based on the thrifted item only.
+The tool returns an error string with a descriptive error message. The agent should provide a caption based on the thrifted item only.
 
 ---
 
@@ -91,11 +91,11 @@ Adds one or more items to the user's session wardrobe.
 
 **What it returns:**
 <!-- Describe the return value — what fields does a result contain? -->
-A string containing a success message that includes number of pieces added. If there was an error and nothing could be added, a error string stating nothing was added is returned.
+A list of tuples where each tuple contains the item name and category. This gets parsed into an agent-friendly string for the tool result.
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if no items were added? -->
-It returns a string describing the failure: "Error: Could not save items to wardrobe state."
+It returns a string describing the failure: "Error: Could not save items to wardrobe state." The agent then generates a caption based on user query context and `selected_item`.
 
 ---
 
@@ -103,7 +103,7 @@ It returns a string describing the failure: "Error: Could not save items to ward
 
 **How does your agent decide which tool to call next?**
 <!-- Describe the logic your planning loop uses. What does it look at? What conditions change its behavior? How does it know when it's done? -->
-The agent receives a list of messages containing the turn history, including the tools called and the tool-call results. The agent will make an initial call to the LLM to determine which tools need to be called depending on the user's query. The initial call includes the user's query, a system prompt, and tool definitions. While there are tools to call, the agent will extract the name of the tool and tool arguments (applicable to `search_listings` and `add_items_to_wardrobe` only), the tool will be executed, and the result saved in a variable. When no tool errors occur, session object attributes will be updated deterministically after tool results are returned to the main loop. Before moving to the next turn, the full assistant message will be appended to the messages list followed by the tool-call result. If a tool call sets a critical "error" attribute in the session object, the main loop catches this flag immediately after execution, breaks the loop, and exits early. When there are no more tools to call, the agent captures the LLM's final conversational message content, assigning it to the appropriate session attributes to handle soft fallbacks if necessary, completes the loop, and returns the session object.
+The agent tracks an active messages log containing the full turn history, including previously executed tools and their text results. To begin, the agent submits the user's query, a system prompt, and JSON tool definitions to the LLM, which evaluates the state of this messages log to determine the initial sequence of actions. While tool calls are requested, the agent runs a dynamic orchestration loop turn-by-turn: if the requested tool requires parsed arguments from the agent (`search_listings` or `add_items_to_wardrobe`), the agent extracts the tool name and arguments; if it is a parameterless trigger tool (suggest_outfit or create_fit_card), the loop bypasses LLM argument extraction and injects data directly from the backend session state. When no critical errors occur, session object attributes are updated deterministically after results are returned. Before moving to the next turn, the full assistant message and the tool result (either the exact return value from the call, or an agent friendly context-rich string) are appended to the messages history so the LLM can evaluate the updated state on its next turn. If a tool execution sets a critical 'error' attribute in the session object, the main loop catches this flag immediately, breaks execution, and exits early. When the LLM reads the turn history and emits no more tool calls, the loop terminates naturally. The agent captures the LLM's final conversational message content, assigns it to the appropriate unpopulated session attributes to handle soft fallbacks where necessary, completes the interaction, and returns the session object.
 
 ---
 

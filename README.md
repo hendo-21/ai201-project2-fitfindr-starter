@@ -17,10 +17,10 @@ Searches the listings data for items matching the description, size, and within 
 - `max_price` (float): The maximum price (inclusive) is looking to pay to filter listings by. None if not provided.
 
 **What it returns:**
-The function returns a list of matching listing dicts based on the input parameters. The list is sorted from most relevant to least. 
+The function returns a list of matching listing dicts based on the input parameters. The list is sorted from most relevant to least.
 
 **What happens if it fails or returns nothing:**
-If no listings match, the function will return an empty list. The agent should inform the user that it could not find relevant listings based on the provided description, size, or price (if they were provided), and suggest that the user try re-phrasing their description, and/or provide additional details.
+If no listings match, the function will return an empty list rather than raising an exception. The agent should inform the user that it could not find relevant listings based on the provided description, size, or price (if they were provided), and suggest that the user try re-phrasing their description, and/or provide additional details.
 
 ---
 
@@ -37,7 +37,7 @@ The function takes a an item the user is considering buying, the user's wardrobe
 A non-empty string containing the outfit suggestions based on either the `new_item` and the `wardrobe`, or general styling based on `new_item` if no wardrobe is found.
 
 **What happens if it fails or returns nothing:**
-If the wardrobe is empty or no outfit can be suggested, the agent should check the initial query to see if it included style preferences, and then offer styling advice based on that. If the initial query did not include any style preferences, then offer general styling advice based on `new_item`. The agent should also offer to add wardrobe pieces, providing the user with details on the information needed to fill out a wardrobe item (wardrobe-schema in human readable format).
+If the wardrobe is empty or no outfit can be suggested, the tool's LLM should check the initial query to see if it included style preferences, and then offer styling advice based on that. If the initial query did not include any style preferences, then the tool's LLM should offer general styling advice based on `new_item`.
 
 ---
 
@@ -47,14 +47,14 @@ If the wardrobe is empty or no outfit can be suggested, the agent should check t
 Generates a 2-4 sentence outfit-of-the-day style caption for social media based on the suggested outfit and thrifted find.
 
 **Input parameters:**
-- `outfit` (str): The outfit suggestions returned by `suggest_outfit` 
-- `new_item` (dict): A listing from the listings database representing an item the user wants to buy.
+- `outfit` (str): The outfit suggestions returned by `suggest_outfit`.
+- `new_item` (dict): A listing from the listings database representing an item the user wants to buy. The listing dict for the thrifted item.
 
 **What it returns:**
-A 2-4 sentence string that can be used on TikTok/Instagram.
+A 2-4 sentence string that can be used as a caption on TikTok/Instagram.
 
 **What happens if it fails or returns nothing:**
-The agent should tell the user that the outfit data is incomplete, and then provide a caption based on the thrifted item only.
+The tool returns an error string with a descriptive error message. The agent should provide a caption based on the thrifted item only.
 
 ---
 
@@ -68,10 +68,10 @@ Adds one or more items to the user's session wardrobe.
 - `wardrobe'` (list[dict]): The active session wardrobe list, passed by reference and modified in-place.
 
 **What it returns:**
-A string containing a success message that includes number of pieces added. If there was an error and nothing could be added, a error string stating nothing was added is returned.
+A list of tuples where each tuple contains the item name and category. This gets parsed into an agent-friendly string for the tool result.
 
 **What happens if it fails or returns nothing:**
-It returns a string describing the failure: "Error: Could not save items to wardrobe state."
+It returns a string describing the failure: "Error: Could not save items to wardrobe state." The agent then generates a caption based on user query context and `selected_item`.
 
 ---
 
@@ -87,33 +87,42 @@ It returns a string describing the failure: "Error: Could not save items to ward
 **Error handling agent response examples**
 
 Scenario: the user enters a query that generates no search listings.
+- Tool response: returns an empty list.
 - Agent response: exit the planning loop early and provide the user with a helpful message about what went wrong and how to retry with a better query.
 - Evidence: [Gradio UI screenshot showing agent response](images/gradio-no-search-results.png) | [Terminal screenshot showing search_listing returns empty list and doesn't raise exception](images/search-listings-no-results.png)
 
 Scenario: `suggest_outfit` is triggered with an empty wardrobe.
-- Agent response: the tool returns a helpful string with general styling advice rather than raising an exception or returning an empty string.
+- Tool response: the tool returns a helpful string with general styling advice rather than raising an exception or returning an empty string.
+- Agent response: the agent registers that the outfit suggestion was returned by the tool via the message history and continues its loop.
 - Evidence: [Terminal screenshot showing helpul string response](images/suggest-outfit-empty-wardrobe.png)
 
 Scenario: `create_fit_card` is triggered with an empty outfit string.
-- Agent response: the tool returns a descriptive error message string and the agent generates a caption based on query context and `selected_item`, which gets stored in `session["fit_card"].
+Tool response: the tool returns a descriptive error message string.
+- Agent response: the agent generates a caption based on query context and `selected_item` just before returning exiting its loop, which gets stored in `session["fit_card"].
 - Evidence: [Gradio UI screenshot showing agent response](images/gradio-create-fit-card-empty-outfit-suggestion.png) | [Terminal screenshot showing `create_fit_card` returns an error string](images/create-fit-card-empty-outfit-suggestion.png)
 
 ---
 
 ## The Planning Loop
 
-The agent receives system prompt, user query, and a list of messages containing the turn history, including the tools called and the tool-call results. The agent makes an initial call to the LLM—including the user's query, a system prompt, and tool definitions—to determine which tools need to be called.
+The agent receives a system prompt, user query, and a list of messages containing the turn history, including the tools called and the tool-call results. The agent makes an initial call to the LLM, including the user's query, a system prompt, and tool definitions, to determine which tools need to be called. The agent then executes an orchestration loop governed by explicit conditional branching logic that maps system states directly to execution decisions:
 
-The agent then executes a dynamic orchestrator loop governed by the following conditional branching logic:
+**Loop Continuation Condition:** 
+* State Checked: The accumulated messages log (which tracks the turn history and previous tool results) passed to the LLM, and the resulting presence of a tool_calls array in its response payload.
+* Decision Triggered: On each iteration, the LLM reads the updated messages log to evaluate project progress. As long as it determines more information is needed based on the system prompt, and emits a `tool_calls` array, the execution loop continues. This is only broken by a max turns count being reached, critical error, or successful completion of the task.
 
-**Loop Condition (while tools are requested):** As long as the LLM's response contains a tool_calls array, the execution loop continues turn-by-turn.
-* If the requested tool needs to parse information from the user query (search_listings or add_items_to_wardrobe), the agent extracts the tool name and arguments natively parsed by the LLM.
-* If the tool does not require arguments from the LLM (suggest_outfit or create_fit_card), the agent bypasses LLM parsing and uses arguments directly from the backend session state for the tool call.
-* If a tool call sets a critical "error" attribute in the session object, the main loop catches this flag immediately after execution, breaks the loop, and exits early.
+**Argument Extraction Branch:**
+* State Checked: The specific string value of the requested tool name.
+* Decision Triggered: If the tool is requires LLM parsing of the user query (`search_listings` or `add_items_to_wardrobe`), the agent extracts arguments natively parsed by the LLM. If the tool is a parameterless trigger (`suggest_outfit` or `create_fit_card`), the agent bypasses LLM parsing and injects arguments directly from the backend session state.
 
-Session object attributes are updated deterministically after tool results are retured to the main loop. Before moving to the next turn, the full assistant message and the tool-call result are appended to the messages history.
+**Tool Result & critical error branch:**
+* State Checked: The presence of a critical "error" attribute flag inside the backend session object immediately following tool execution.
+* Decision Triggered: The main loop catches this flag, breaks the loop sequence immediately, and exits early to let the LLM handle the failure.
+* Else Branch: If no critical errors occur, session object attributes are updated deterministically, and the full assistant message and tool-call result are appended to the messages history before moving to the next turn.
 
-When the LLM emits a response with no more tools to call, the loop completes. The agent captures the LLM's final conversational message content, assigns it to the appropriate session attributes to handle soft fallbacks if necessary (applicable for `add_items_to_wardrobe` only), and returns the session object.
+**Loop Termination & Soft Fallbacks:**
+* State Checked: An empty or absent tool_calls array in the LLM's response, combined with an empty status on panel variables (like `session["outfit_suggestion"]` or `session["fit_card"]`).
+* Decision Triggered: The loop completes. The agent captures the LLM's final conversational text content, assigns it to the unpopulated panel attributes to execute soft fallbacks gracefully, and returns the completed session object.
 
 ---
 
